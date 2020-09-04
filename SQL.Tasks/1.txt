@@ -1,0 +1,26 @@
+CREATE TRIGGER [dbo].[generate_number] 
+ON [dbo].[Faktury]
+INSTEAD OF INSERT AS
+BEGIN
+	SET NOCOUNT on;
+	DECLARE @klient INT;
+	DECLARE @kwotaBrutto MONEY;
+	SELECT TOP 1 @klient = [Klient], @kwotaBrutto = [KwotaBrutto] FROM inserted ORDER BY inserted.Id DESC;
+	DECLARE @numerFaktury NVARCHAR(50) = NULL;
+
+	SELECT TOP 1 @numerFaktury = [Numer] FROM [dbo].[Faktury] 
+	WHERE [Klient] = @klient
+	ORDER BY LEN([Numer]) DESC, [Numer] DESC;
+
+	IF (@numerFaktury IS NULL)
+		BEGIN
+			SET @numerFaktury = (CAST(@klient AS NVARCHAR(50)) + '/1');
+		END
+	ELSE
+		BEGIN
+			SET @numerFaktury = (CAST(@klient AS NVARCHAR(50)) + '/' + CAST(CAST(RIGHT(@numerFaktury, LEN(@numerFaktury) - CHARINDEX('/', @numerFaktury)) AS INT) + 1 AS NVARCHAR(50)));
+		END
+	
+	INSERT INTO [dbo].[Faktury] ([Klient], [KwotaBrutto], [Numer]) 
+	VALUES(@klient, @kwotaBrutto, @numerFaktury)
+END;
