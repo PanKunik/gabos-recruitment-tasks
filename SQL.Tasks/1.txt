@@ -3,24 +3,37 @@ ON [dbo].[Faktury]
 INSTEAD OF INSERT AS
 BEGIN
 	SET NOCOUNT on;
+	DECLARE @liczbaWierszy INT = @@ROWCOUNT;
 	DECLARE @klient INT;
 	DECLARE @kwotaBrutto MONEY;
-	SELECT TOP 1 @klient = [Klient], @kwotaBrutto = [KwotaBrutto] FROM inserted ORDER BY inserted.Id DESC;
 	DECLARE @numerFaktury NVARCHAR(50) = NULL;
 
-	SELECT TOP 1 @numerFaktury = [Numer] FROM [dbo].[Faktury] 
-	WHERE [Klient] = @klient
-	ORDER BY LEN([Numer]) DESC, [Numer] DESC;
+	DECLARE @tempTable TABLE ([Id] INT NOT NULL, [KwotaBrutto] MONEY NOT NULL, [Klient] INT NOT NULL)
+	INSERT INTO @tempTable 
+		SELECT ROW_NUMBER() OVER(ORDER BY [Klient] ASC), [KwotaBrutto], [Klient]
+		FROM inserted;
 
-	IF (@numerFaktury IS NULL)
-		BEGIN
+	DECLARE @licznik INT = 1;
+	WHILE (@licznik <= @liczbaWierszy)
+	BEGIN
+		SET @numerFaktury = NULL;
+
+		SELECT @klient = [Klient], @kwotaBrutto = [KwotaBrutto] 
+		FROM @tempTable
+		WHERE [Id] = @licznik;
+
+		SELECT TOP 1 @numerFaktury = [Numer] FROM [dbo].[Faktury] 
+		WHERE [Klient] = @klient
+		ORDER BY LEN([Numer]) DESC, [Numer] DESC;
+
+		IF (@numerFaktury IS NULL)
 			SET @numerFaktury = (CAST(@klient AS NVARCHAR(50)) + '/1');
-		END
-	ELSE
-		BEGIN
-			SET @numerFaktury = (CAST(@klient AS NVARCHAR(50)) + '/' + CAST(CAST(RIGHT(@numerFaktury, LEN(@numerFaktury) - CHARINDEX('/', @numerFaktury)) AS INT) + 1 AS NVARCHAR(50)));
-		END
-	
-	INSERT INTO [dbo].[Faktury] ([Klient], [KwotaBrutto], [Numer]) 
-	VALUES(@klient, @kwotaBrutto, @numerFaktury)
+		ELSE
+			SET @numerFaktury = (CAST(@klient AS NVARCHAR(50)) + '/' + CAST(CAST(RIGHT(@numerFaktury, LEN(@numerFaktury) - CHARINDEX('/', @numerFaktury)) AS INT) + 1 AS NVARCHAR(50))); 
+
+		INSERT INTO [dbo].[Faktury] ([Klient], [KwotaBrutto], [Numer])
+		VALUES (@klient, @kwotaBrutto, @numerFaktury);
+
+		SET @licznik = @licznik + 1
+	END
 END;
